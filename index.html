@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SVG Studio Ultimate</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0c0f; --panel:#0f1113; --accent:#46a6ff; --text:#e6eef7; --muted:#9aa4b2;
+  --radius:12px; --smooth:250ms;
+}
+html,body{
+  margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+  font-family:Inter,sans-serif; display:flex; background:var(--bg); color:var(--text);
+}
+#sidebar{
+  width:280px; background:var(--panel); display:flex; flex-direction:column;
+  padding:14px; box-sizing:border-box; gap:12px; overflow:hidden;
+}
+#main{
+  flex:1; display:flex; flex-direction:column; min-width:0; min-height:0;
+}
+#topbar{height:52px; display:flex; align-items:center; gap:8px; padding:0 10px; background:var(--panel); border-bottom:1px solid rgba(255,255,255,0.03);}
+#stage{
+  flex:1; display:flex; width:100%; height:100%; overflow:auto; position:relative; background:#000;
+}
+#svgContainer{
+  width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+  background:#000; user-select:none; touch-action:none;
+}
+.svgInner svg{
+  width:auto; height:auto; max-width:90%; max-height:90%;
+}
+.bg-check{background-image: linear-gradient(45deg,#161616 25%, transparent 25%), linear-gradient(-45deg,#161616 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #161616 75%), linear-gradient(-45deg, transparent 75%, #161616 75%); background-size:24px 24px; background-position:0 0,0 12px,12px -12px,-12px 0;}
+.bg-white{background:#fff;}
+.bg-black{background:#000;}
+#footer{height:42px; display:flex; align-items:center; gap:8px; padding:0 12px; border-top:1px solid rgba(255,255,255,0.02);}
+.muted{color:var(--muted); font-size:13px;}
+.controls{display:flex; flex-wrap:wrap; gap:6px;}
+button,input[type=button],.ghost,select{background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.03); color:var(--muted); padding:6px 10px; border-radius:10px; font-size:13px; cursor:pointer; transition:all var(--smooth) ease;}
+button.primary{background:linear-gradient(90deg,var(--accent),#7cc9ff); color:#021; border:none;}
+button:hover,select:hover{transform:translateY(-2px);}
+.fileList{flex:1; overflow:auto; padding-right:4px;}
+.fileItem{padding:10px; border-radius:10px; margin-bottom:6px; background:transparent; cursor:pointer; border:1px solid transparent; display:flex; justify-content:space-between; align-items:center; transition:all 220ms ease;}
+.fileItem:hover{background:rgba(255,255,255,0.015); border-color:rgba(255,255,255,0.03);}
+.fileItem.active{background:linear-gradient(90deg,rgba(70,166,255,0.12),rgba(124,200,255,0.05)); border-color:rgba(70,166,255,0.22);}
+select{appearance:none; padding:6px 8px; border-radius:8px; background:var(--panel); color:var(--text); border:1px solid rgba(255,255,255,0.05); cursor:pointer;}
+.fileList::-webkit-scrollbar{width:8px;}
+.fileList::-webkit-scrollbar-thumb{background:linear-gradient(var(--panel),#111); border-radius:8px;}
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <div class="brand" style="display:flex;align-items:center;gap:10px;">
+    <div class="logo" style="width:40px;height:40px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#021;">S</div>
+    <div>
+      <div style="font-weight:600;font-size:15px;">SVG Studio</div>
+      <div class="muted" style="font-size:12px">Ultimate Viewer & Editor</div>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="addFileBtn" class="primary">+ Add SVG</button>
+    <input id="fileInput" type="file" accept=".svg" multiple style="display:none;">
+    <button id="btnClear" class="ghost">Clear All</button>
+  </div>
+  <div style="font-size:13px;color:var(--muted)">My SVGs</div>
+  <div class="fileList" id="fileList"></div>
+  <div style="margin-top:10px;font-size:13px;color:var(--muted)">Theme</div>
+  <select id="themeSelect"></select>
+  <div style="margin-top:10px;font-size:13px;color:var(--muted)">Export Format</div>
+  <select id="exportFormat">
+    <option value="png">PNG</option>
+    <option value="jpeg">JPEG</option>
+    <option value="webp">WEBP</option>
+  </select>
+  <button id="exportOne" class="ghost" style="margin-top:8px;">Export Current</button>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <button id="prevBtn" class="ghost">◀ Prev</button>
+    <button id="nextBtn" class="ghost">Next ▶</button>
+    <button id="fitBtn" class="ghost">Fit</button>
+    <button id="toggleBorder" class="ghost">Toggle Border</button>
+    <button id="toggleBackground" class="ghost">Bg</button>
+    <button id="downloadBtn" class="ghost">Download SVG</button>
+  </div>
+  <div id="stage" class="bg-black">
+    <div id="svgContainer"><div id="svgInner" class="svgInner"></div></div>
+  </div>
+  <div id="footer">
+    <div class="muted" id="info">No SVG loaded</div>
+    <div style="flex:1"></div>
+    <div class="muted">Made with ♥ — 1_1x1_ ♥</div>
+  </div>
+</div>
+
+<script>
+// --- Variables ---
+let items=JSON.parse(localStorage.getItem('svgstudio_items')||'[]');
+let current=items.length?0:-1;
+let container=document.getElementById('svgInner');
+let fileInput=document.getElementById('fileInput');
+let fileListEl=document.getElementById('fileList');
+let infoEl=document.getElementById('info');
+let exportFormat=document.getElementById('exportFormat');
+let themeSelect=document.getElementById('themeSelect');
+
+// --- 30 beautiful themes ---
+const themes={
+"Dark":{bg:"#0b0c0f",panel:"#0f1113",accent:"#46a6ff",text:"#e6eef7"},
+"Light":{bg:"#f2f3f7",panel:"#ffffff",accent:"#4f86f7",text:"#0a0a0a"},
+"Sunset":{bg:"#ff6f61",panel:"#ffb3ab",accent:"#ff3c00",text:"#fff7f5"},
+"Ocean":{bg:"#005f73",panel:"#0a9396",accent:"#94d2bd",text:"#e0fbfc"},
+"Forest":{bg:"#0b3d0b",panel:"#145214",accent:"#4caf50",text:"#d4f0d4"},
+"Cyberpunk":{bg:"#0c001a",panel:"#1c002f",accent:"#ff00ff",text:"#ff9cff"},
+"Neon":{bg:"#0f0014",panel:"#1c0022",accent:"#ff00ff",text:"#ff9cff"},
+"Matrix":{bg:"#001400",panel:"#003200",accent:"#00ff00",text:"#7cff7c"},
+"Pastel":{bg:"#fff0f5",panel:"#ffe4e1",accent:"#ffb3ba",text:"#2b2b2b"},
+"Retro":{bg:"#2d2d2d",panel:"#3e3e3e",accent:"#ffb400",text:"#ffe500"},
+"Vaporwave":{bg:"#f0c0ff",panel:"#d080ff",accent:"#ff4fff",text:"#2b0040"},
+"Soft":{bg:"#f0f1f5",panel:"#d9dbe2",accent:"#6c8cff",text:"#1a1a1a"},
+"LightBlue":{bg:"#d0e7ff",panel:"#a0cfff",accent:"#0055ff",text:"#000a2a"},
+"DarkBlue":{bg:"#001a3d",panel:"#003366",accent:"#0099ff",text:"#d0e7ff"},
+"Sunrise":{bg:"#fff5cc",panel:"#ffe699",accent:"#ffcc33",text:"#331a00"},
+"Twilight":{bg:"#2b0033",panel:"#3d005c",accent:"#ff33ff",text:"#f0d6ff"},
+"Galaxy":{bg:"#0a001f",panel:"#1a003f",accent:"#9966ff",text:"#e0d0ff"},
+"Lava":{bg:"#330000",panel:"#660000",accent:"#ff3300",text:"#ffe6e6"},
+"Sand":{bg:"#fff8e7",panel:"#ffedc1",accent:"#ffcc66",text:"#3d2200"},
+"Ice":{bg:"#e0f7ff",panel:"#b3ecff",accent:"#33ccff",text:"#002233"},
+"PurpleRain":{bg:"#220022",panel:"#440044",accent:"#bb00ff",text:"#f5ccff"},
+"Mint":{bg:"#e0fff0",panel:"#b3ffd9",accent:"#33ff99",text:"#002211"},
+"Candy":{bg:"#ffe0f0",panel:"#ffb3d9",accent:"#ff3399",text:"#330022"},
+"Coffee":{bg:"#3d1f00",panel:"#6b3d00",accent:"#ff9900",text:"#fff2e6"},
+"Steel":{bg:"#2b2b2b",panel:"#4f4f4f",accent:"#b0b0b0",text:"#e0e0e0"},
+"Gold":{bg:"#332900",panel:"#665500",accent:"#ffcc00",text:"#fff7cc"},
+"Silver":{bg:"#2b2b2b",panel:"#7f7f7f",accent:"#c0c0c0",text:"#f0f0f0"},
+"Autumn":{bg:"#4d2600",panel:"#995c33",accent:"#ff9933",text:"#fff2e6"},
+"Winter":{bg:"#001933",panel:"#003366",accent:"#3399ff",text:"#e6f0ff"},
+"Spring":{bg:"#e6ffe6",panel:"#b3ffb3",accent:"#33cc33",text:"#003300"}
+};
+
+for(const k in themes){ const opt=document.createElement('option'); opt.value=k; opt.textContent=k; themeSelect.appendChild(opt); }
+
+// --- Apply theme ---
+let currentTheme='Dark';
+function applyTheme(name){
+  const t=themes[name]; if(!t) return;
+  document.documentElement.style.setProperty('--bg', t.bg);
+  document.documentElement.style.setProperty('--panel', t.panel);
+  document.documentElement.style.setProperty('--accent', t.accent);
+  document.documentElement.style.setProperty('--text', t.text);
+  currentTheme=name;
+  localStorage.setItem('svgstudio_theme', name);
+}
+if(localStorage.getItem('svgstudio_theme')) applyTheme(localStorage.getItem('svgstudio_theme'));
+themeSelect.value=currentTheme;
+themeSelect.addEventListener('change',e=>{applyTheme(e.target.value);});
+
+// --- Save/load ---
+function saveState(){ localStorage.setItem('svgstudio_items', JSON.stringify(items)); renderList(); }
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
+
+// --- Render list ---
+function renderList(){
+  fileListEl.innerHTML='';
+  items.forEach((it,idx)=>{
+    const el=document.createElement('div'); el.className='fileItem'+(idx===current?' active':'');
+    el.innerHTML=`<div style="flex:1"><strong>${it.name}</strong></div>`;
+    el.onclick=()=>{ current=idx; showCurrent(); renderList(); };
+    fileListEl.appendChild(el);
+  });
+}
+
+// --- Show current SVG ---
+function showCurrent(){
+  if(current<0 || !items[current]){ container.innerHTML=''; infoEl.textContent='No SVG loaded'; return; }
+  const it=items[current]; container.innerHTML=it.content; infoEl.textContent=`${current+1} / ${items.length} — ${it.name}`;
+}
+showCurrent(); renderList();
+
+// --- Add files ---
+document.getElementById('addFileBtn').onclick=()=>fileInput.click();
+fileInput.onchange=async e=>{
+  const fList=Array.from(e.target.files||[]);
+  for(const f of fList){
+    const txt=await f.text();
+    items.push({id:uid(),name:f.name,content:txt});
+    current=items.length-1;
+  }
+  saveState(); showCurrent();
+  fileInput.value='';
+};
+
+// --- Buttons ---
+document.getElementById('btnClear').onclick=()=>{items=[];current=-1;saveState();showCurrent();};
+document.getElementById('prevBtn').onclick=()=>{ if(current>0) current--; showCurrent(); renderList(); };
+document.getElementById('nextBtn').onclick=()=>{ if(current<items.length-1) current++; showCurrent(); renderList(); };
+document.getElementById('fitBtn').onclick=()=>{ if(current<0) return; const svg=container.firstElementChild; if(!svg) return; svg.style.maxWidth='90%'; svg.style.maxHeight='90%'; };
+document.getElementById('toggleBorder').onclick=()=>{ if(current<0) return; const svg=container.firstElementChild; if(svg.style.outline){ svg.style.outline=''; } else svg.style.outline='2px solid rgba(255,255,255,0.08)'; };
+document.getElementById('toggleBackground').onclick=()=>{ if(current<0) return; const stageEl=document.getElementById('stage'); stageEl.className=stageEl.className==='bg-black'?'bg-white':'bg-black'; };
+
+// --- Export current file ---
+document.getElementById('exportOne').onclick = () => {
+  if(current<0) return alert('No SVG loaded');
+  const svgText = items[current].content;
+  const format = exportFormat.value || 'png';
+
+  const blob = new Blob([svgText], {type:'image/svg+xml'});
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img,0,0);
+    canvas.toBlob(b=>{
+      const a=document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      const ext = format.toLowerCase();
+      a.download = items[current].name.replace(/\.svg$/i,'.'+ext);
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }, 'image/'+format, 0.92);
+    URL.revokeObjectURL(url);
+  };
+  img.src=url;
+};
+</script>
+</body>
+</html>
